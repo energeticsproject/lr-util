@@ -28,7 +28,6 @@ const makeResolverPlugin = (
       build.onResolve({filter: /./}, (args) => {
         let {importer, path} = args
         path = path.startsWith('.') ? resolvePath(importer, path) : path
-        // console.log('resolve', path)
         let r = resolve(path)
         if ('load' in r) loads[path] = r.load
         else externals[path] = r.external
@@ -39,7 +38,6 @@ const makeResolverPlugin = (
         }
       })
       build.onLoad({filter: /./, namespace: 'resolve'}, async (args) => {
-        // console.log('build', args.path)
         let {contents, loader} = await loads[args.path]
         return {contents, loader}
       })

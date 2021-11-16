@@ -4,7 +4,7 @@ import {build, ResolveResult} from './build'
 import {LanguageOption, LanguageRegistry} from './LanguageRegistry'
 import {buildParserFileAsync} from './buildParserFileAsync'
 
-// use as interface for sync, use as class for async
+/** Use as interface for sync, use as class for async */
 export class SrcFile {
   path: string
   content: string

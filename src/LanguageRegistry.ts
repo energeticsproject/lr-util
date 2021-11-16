@@ -1,3 +1,5 @@
+import {Parser} from '@lezer/common'
+import {LanguageSupport} from '@codemirror/language'
 import {Language, SrcFile} from './Language'
 
 export interface LanguageOption {
@@ -14,6 +16,14 @@ export interface LanguageOption {
   sample: () => Promise<SrcFile[]>
 }
 
+export interface FileExtension {
+  extension: string[]
+  index: (registry: LanguageRegistry) => Promise<{
+    parser: Parser
+    support: LanguageSupport
+  }>
+}
+
 export class LanguageRegistry {
   languageOptions: LanguageOption[] = []
   modules: {
@@ -23,8 +33,10 @@ export class LanguageRegistry {
       language: Language
     }
   } = {}
-  constructor(languageOptions: LanguageOption[]) {
+  extensions: FileExtension[]
+  constructor(languageOptions: LanguageOption[], extensions?: FileExtension[]) {
     for (let lo of languageOptions) this.push(lo)
+    this.extensions = extensions ?? []
   }
   push(languageOption: LanguageOption) {
     this.languageOptions.push(languageOption)
@@ -39,12 +51,12 @@ export class LanguageRegistry {
     let m = `Cannot add module.$type ("$name") to registry, it is already defined`
     let e = (t, n) => new Error(m.replace('$type', t).replace('$name', n))
     if (this.modules[index]) throw e('index', index)
-    if (this.modules[parser]) throw e('parser', parser)
-    if (this.modules[support]) throw e('support', support)
+    if (this.modules[parser] && parser) throw e('parser', parser)
+    if (this.modules[support] && support) throw e('support', support)
     let value = {languageOption, language: null}
     this.modules[index] = value
-    this.modules[parser] = value
-    this.modules[support] = value
+    if (parser) this.modules[parser] = value
+    if (support) this.modules[support] = value
   }
   async get(module: string, initialBuild?: boolean): Promise<Language>
   // prettier-ignore
@@ -76,5 +88,13 @@ export class LanguageRegistry {
     }
 
     return null
+  }
+  getByFilePath(path: string) {
+    let matches: [string, FileExtension['index']][] = []
+    for (let e of this.extensions)
+      for (let o of e.extension)
+        if (path.endsWith(o)) matches.push([o, e.index])
+
+    return matches.sort(([a], [b]) => b.length - a.length)[0]?.[1]?.(this)
   }
 }

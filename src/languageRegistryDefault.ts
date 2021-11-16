@@ -1,5 +1,10 @@
+import {LRParser} from '@lezer/lr'
 import {SrcFile} from './Language'
-import {LanguageRegistry} from './LanguageRegistry'
+import {
+  FileExtension,
+  LanguageOption,
+  LanguageRegistry,
+} from './LanguageRegistry'
 import {loadFromGithub, loadTreeFromGithub} from './loadFromGithub'
 
 let gh = 'https://raw.githubusercontent.com/'
@@ -8,6 +13,7 @@ let sp = 'TheRenegadeCoder/sample-programs/archive/'
 let fa = async (a: string[]) => {
   let f: SrcFile[] = await Promise.all(
     a.map(async (path) => {
+      if (!path) return
       let res = await fetch(path)
       let content = await res.text()
       return res.status === 200 && {path, content}
@@ -17,7 +23,7 @@ let fa = async (a: string[]) => {
   return f
 }
 
-export const languageRegistryDefault = new LanguageRegistry([
+const languageOptions: LanguageOption[] = [
   {
     label: 'Basic Example',
     module: {
@@ -32,7 +38,20 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {EXAMPLELanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa(['/examples/example.basic-example']),
+    sample: async () => {
+      let [txt] = await fa([gh + 'codemirror/lang-example/main/test/cases.txt'])
+      let src: SrcFile[] = []
+      for (let c of txt.content.split(/(^|\n)#\s+/)) {
+        if (!c.trim()) continue
+        c = c.split('==>')[0]
+        let [head, ...tail] = c.split('\n')
+        c = tail.join('\n')
+        head = head.trim()
+        c = c.trim()
+        src.push({path: head, content: c})
+      }
+      return src
+    },
   },
   {
     label: 'CSS',
@@ -50,7 +69,14 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {cssLanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa(['/examples/example.css']),
+    sample: async () => {
+      let src = await loadTreeFromGithub('mdn/css-examples', '.css')
+      for (let f of src) f.path = f.path.replace(/\/(styles?)\.css$/, '.css')
+      for (let f of src) f.path = f.path.replace(/\/css\.css$/, '.css')
+      let hashmap = {}
+      for (let f of src) hashmap[f.path.split('/').slice(-1)[0]] = f
+      return Object.values(hashmap)
+    },
   },
   {
     label: 'C++',
@@ -88,7 +114,15 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export const support = html({matchClosingTags: false, autoCloseTags: true})\n`,
       })
     },
-    sample: () => fa(['/examples/example.html']),
+    sample: async () => {
+      let src = await loadTreeFromGithub('mdn/css-examples', '.html')
+      for (let f of src) {
+        f.path = f.path.replace(/\/index[^\/]*?\.html$/, '.html')
+      }
+      let hashmap = {}
+      for (let f of src) hashmap[f.path.split('/').slice(-1)[0]] = f
+      return Object.values(hashmap)
+    },
   },
   {
     label: 'Java',
@@ -145,7 +179,7 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {jsonLanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa(['/examples/example.json']),
+    sample: async () => loadTreeFromGithub('dariusk/corpora', '.json'),
   },
   {
     label: 'Lezer',
@@ -163,7 +197,26 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {lezerLanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa([gh + 'codemirror/lang-example/main/src/syntax.grammar']),
+    sample: async () => {
+      let src = await fa(
+        languageOptions.map((lo) => {
+          if (lo.module.index === 'basic-example') {
+            return `${gh}codemirror/lang-example/main/src/syntax.grammar`
+          } else if (lo.module.index === 'lezer') {
+            return `${gh}lezer-parser/lezer-grammar/main/src/lezer.grammar`
+          }
+          let repo = lo.module.parser ?? lo.module.support
+          repo = repo.replace('@lezer', 'lezer-parser').replace('@', '')
+          return `${gh}${repo}/main/src/${lo.module.index}.grammar`
+        })
+      )
+      for (let f of src) {
+        if (f.path.includes('lang-example')) {
+          f.path = '/src/basic-example.grammar'
+        }
+      }
+      return src
+    },
   },
   {
     label: 'Markdown',
@@ -181,7 +234,14 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {markdownLanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa(['/examples/example.md']),
+    sample: async () => {
+      let src = await loadTreeFromGithub(
+        'github/docs/content/github/writing-on-github',
+        '.md'
+      )
+      src = src.filter((f) => !f.path.endsWith('/index.md'))
+      return src
+    },
   },
   {
     label: 'PHP',
@@ -243,7 +303,6 @@ export const languageRegistryDefault = new LanguageRegistry([
     label: 'SQL',
     module: {
       index: 'sql',
-      parser: '@lezer/sql',
       support: '@codemirror/lang-sql',
     },
     files: async () => {
@@ -257,13 +316,21 @@ export const languageRegistryDefault = new LanguageRegistry([
       prebuilt[0].content += `\nexport {parser}\n`
       return {src, prebuilt}
     },
-    sample: () => fa(['/examples/example.sql']),
+    sample: async () => {
+      let src = await loadTreeFromGithub(
+        'microsoft/sql-server-samples/samples/demos/belgrade-product-catalog-demo',
+        '.sql'
+      )
+      for (let f of src) {
+        f.path = f.path.replace(/\/([\w.]{1,3}\s+)?([\w\-.]+)$/, '/$2')
+      }
+      return src
+    },
   },
   {
     label: 'WebAssembly',
     module: {
       index: 'wast',
-      parser: '@lezer/wast',
       support: '@codemirror/lang-wast',
     },
     files: async () => {
@@ -295,6 +362,55 @@ export const languageRegistryDefault = new LanguageRegistry([
           `export {xmlLanguage as support} from './support'\n`,
       })
     },
-    sample: () => fa(['/examples/example.xml']),
+    sample: () =>
+      loadTreeFromGithub('zynksoftware/samples/XML Samples', '.xml'),
   },
-])
+]
+
+const extensions: FileExtension[] = [
+  {
+    extension: ['js'],
+    index: async (r) => {
+      let l = await r.get('javascript')
+      return {
+        parser: (l.parser as LRParser).configure({dialect: ''}),
+        support: l.module.support.javascriptLanguage,
+      }
+    },
+  },
+  {
+    extension: ['ts'],
+    index: async (r) => {
+      let l = await r.get('javascript')
+      return {
+        parser: (l.parser as LRParser).configure({dialect: 'ts'}),
+        support: l.module.support.typescriptLanguage,
+      }
+    },
+  },
+  {
+    extension: ['json'],
+    index: async (r) => {
+      let l = await r.get('json')
+      return {
+        parser: (l.parser as LRParser).configure({}),
+        support: l.support,
+      }
+    },
+  },
+  {
+    extension: ['grammar'],
+    index: async (r) => {
+      let l = await r.get('lezer')
+      return {
+        parser: (l.parser as LRParser).configure({}),
+        support: l.support,
+      }
+    },
+  },
+]
+
+export const languageRegistryDefault = new LanguageRegistry(
+  languageOptions,
+  extensions
+)

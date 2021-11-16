@@ -23,7 +23,7 @@ export const setGithubAuth = (token: string) => {
 }
 
 const parseURL = (url: string): [string, string, string] => {
-  let reg = /^([\w\-]+\/[\w\-]+)(?:\/([\w\-\/]+))?(?:@(.+))?$/
+  let reg = /^([\w\-]+\/[\w\-]+)(?:\/([\w\-\/\s%]+))?(?:@(.+))?$/
   let [, repo, path, tag] = url.match(reg) ?? []
   return [repo, path, tag]
 }
@@ -36,28 +36,20 @@ interface Tag {
 
 type GetTagParams = {repo: string; name?: string}
 const getTag = async ({repo, name}: GetTagParams): Promise<Tag> => {
-  let [tags, branches] = await Promise.all([
+  let [repoGH, tags] = await Promise.all([
+    api.get(`/repos/${repo}`),
     api.get(`/repos/${repo}/tags`),
-    api.get(`/repos/${repo}/branches`),
   ])
   let t = (type: 'tag' | 'branch', t: any): Tag => {
     if (!t) return null
     return {type, name: t.name, sha: t.commit.sha}
   }
-  if (!name) name = /^\d+\.\d+\.\d+$/.test(tags[0].name) ? 'latest' : 'main'
-  if (name === 'latest') {
-    return t('tag', tags[0])
-  }
-  for (let tag of tags) {
-    if (tag.name !== name) continue
-    return t('tag', tag)
-  }
-  for (let branch of branches) {
-    if (branch.name !== name) continue
-    return t('branch', branch)
-  }
-
-  return null
+  if (!name && /^\d+\.\d+\.\d+$/.test(tags[0]?.name)) name = 'latest'
+  if (name === 'latest') return t('tag', tags[0])
+  for (let tag of tags) if (tag.name === name) return t('tag', tag)
+  if (!name) name = repoGH.default_branch
+  let branch = await api.get(`/repos/${repo}/branches/${name}`)
+  return t('branch', branch)
 }
 
 type GetSrcParams = {repo: string; tag: Tag}
@@ -174,17 +166,19 @@ export const loadTreeFromGithub = async (tree: string, extension?: string) => {
 
   let data: {tree: {sha: string; path: string}[]}
   let sha = tag.sha
-  let pa = path.split('/')
-  for (let i in pa) {
-    data = await api.get(`/repos/${repo}/git/trees/${sha}`)
-    sha = data.tree.find(({path}) => path === pa[i])?.sha
-    if (!sha) throw new Error(`Could not load tree from github, "${tree}"`)
+  if (path) {
+    let pa = path.split('/')
+    for (let i in pa) {
+      data = await api.get(`/repos/${repo}/git/trees/${sha}`)
+      sha = data.tree.find(({path}) => path === pa[i])?.sha
+      if (!sha) throw new Error(`Could not load tree from github, "${tree}"`)
+    }
   }
   data = await api.get(`/repos/${repo}/git/trees/${sha}?recursive=true`)
 
   return data.tree
     .filter((f) => !extension || f.path.endsWith(extension))
-    .map((f) => `/${path}/${f.path}`)
+    .map((f) => (path ? `/${path}/${f.path}` : `/${f.path}`))
     .map((path) => {
       return new SrcFile({
         path,
