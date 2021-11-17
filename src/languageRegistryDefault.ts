@@ -13,7 +13,7 @@ let sp = 'TheRenegadeCoder/sample-programs/archive/'
 let fa = async (a: string[]) => {
   let f: SrcFile[] = await Promise.all(
     a.map(async (path) => {
-      if (!path) return
+      if (!path) return null
       let res = await fetch(path)
       let content = await res.text()
       return res.status === 200 && {path, content}

@@ -1,12 +1,17 @@
-import esbuild from 'esbuild-wasm'
+import {
+  Plugin,
+  OnLoadResult,
+  initialize,
+  build as esBuild,
+} from 'esbuild-wasm/esm/browser.js'
 
 export type ResolveResult =
-  | {load: Promise<esbuild.OnLoadResult>}
+  | {load: Promise<OnLoadResult>}
   | {external: Promise<any>}
 
 const makeResolverPlugin = (
   resolve: (path: string) => ResolveResult,
-  loads: {[x: string]: Promise<esbuild.OnLoadResult>},
+  loads: {[x: string]: Promise<OnLoadResult>},
   externals: {[x: string]: Promise<any>}
 ) => {
   const resolvePath = (base: string, path: string): string => {
@@ -22,7 +27,7 @@ const makeResolverPlugin = (
     return p
   }
 
-  const plugin: esbuild.Plugin = {
+  const plugin: Plugin = {
     name: 'ResolverPlugin',
     setup(build) {
       build.onResolve({filter: /./}, (args) => {
@@ -53,13 +58,13 @@ export const build = async (
   resolve: (path: string) => ResolveResult
 ): Promise<any> => {
   if (!esbuildInitialiser) {
-    const wasmURL = 'https://unpkg.com/esbuild-wasm@0.13.13/esbuild.wasm'
-    esbuildInitialiser = esbuild.initialize({wasmURL})
+    const wasmURL = 'https://unpkg.com/esbuild-wasm@0.13.14/esbuild.wasm'
+    esbuildInitialiser = initialize({wasmURL})
   }
   await esbuildInitialiser
-  let loads: {[key: string]: Promise<esbuild.OnLoadResult>} = {}
+  let loads: {[key: string]: Promise<OnLoadResult>} = {}
   let externals: {[key: string]: Promise<any>} = {}
-  let build = await esbuild.build({
+  let build = await esBuild({
     bundle: true,
     format: 'iife',
     globalName: '__exports',

@@ -1,7 +1,9 @@
-import {basicSetup, EditorView, EditorState} from '@codemirror/basic-setup'
+import {EditorState, Extension} from '@codemirror/state'
+import {EditorView} from '@codemirror/view'
 import {LanguageSupport} from '@codemirror/language'
 import {Language, SrcFile} from './Language'
 import {LanguageRegistry} from './LanguageRegistry'
+import {basicSetup} from './_basicSetup'
 
 /**
  * If, before something is loaded, the user starts loading a second thing,
@@ -40,6 +42,7 @@ export class CollectionEditor {
   support: (path: string) => Promise<LanguageSupport>
   loading: {[key: string]: string}
   inflight = createInflightManager()
+  extensions: Extension[] = [basicSetup]
   registry: LanguageRegistry
   editorView: EditorView
   constructor(registry: LanguageRegistry) {
@@ -49,7 +52,10 @@ export class CollectionEditor {
   }
   mount(parent: HTMLElement) {
     this.editorView = new EditorView({
-      state: EditorState.create({doc: 'loading...', extensions: [basicSetup]}),
+      state: EditorState.create({
+        doc: 'loading...',
+        extensions: [...this.extensions],
+      }),
       parent,
     })
   }
@@ -89,7 +95,7 @@ export class CollectionEditor {
       },
       async () => {
         this.file = f
-        let extensions = [basicSetup]
+        let extensions = [...this.extensions]
         let support = await this.support?.(path)
         if (support) extensions.push(support)
         return extensions
