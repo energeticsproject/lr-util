@@ -1,6 +1,8 @@
+import {build, ResolveResult} from './build'
 import {SrcFile} from './Language'
 
 const api = {
+  remote: null,
   auth: null,
   cache: {},
   get: async (path: string) => {
@@ -16,6 +18,10 @@ const api = {
     c[path] = json
     return json
   },
+}
+
+export const setGithubRemote = (remote: {language: string; tree: string}) => {
+  api.remote = remote
 }
 
 export const setGithubAuth = (token: string) => {
@@ -77,9 +83,11 @@ const getSrc = async ({
   let npm = JSON.parse(packageJSON.content)
   let prebuilt: SrcFile = null
   if (tag.type === 'tag') {
-    let unpkg = `https://unpkg.com/${npm.name}@${tag.name}/${npm.module}`
+    let unpkg = `https://unpkg.com/${npm.name}@${tag.name}/${npm.main}`
     let bc = await fetch(unpkg).then((res) => res.status === 200 && res.text())
-    if (bc) prebuilt = {path: '/' + npm.module, content: bc}
+    if (bc) {
+      prebuilt = {path: '/' + npm.name, content: bc}
+    }
   }
   return {src, prebuilt}
 }
@@ -113,6 +121,15 @@ export const loadFromGithub = async ({
   support,
   config,
 }: LoadFromGithubParams): Promise<{src: SrcFile[]; prebuilt?: SrcFile[]}> => {
+  if (api.remote?.language) {
+    let p = `parser=${encodeURIComponent(parser)}`
+    let s = `support=${encodeURIComponent(support)}`
+    let c = `config=${encodeURIComponent(config)}`
+    let res = await fetch(`${api.remote.language}?${p}&${s}&${c}`)
+    let data = await res.json()
+    if (res.status !== 200) throw new Error(data)
+    return data
+  }
   let [parserRepo, , parserTagName] = parseURL(parser)
   let [supportRepo, , supportTagName] = parseURL(support)
   let lang = parser.match(/\w+$/)[0]
@@ -152,7 +169,21 @@ export const loadFromGithub = async ({
     }
   }
 
-  src.unshift({path: '/config.ts', content: config, entry: {index: true}})
+  if (prebuilt) {
+    prebuilt.unshift({
+      path: '/config.js',
+      content: await build(
+        '/',
+        (s): ResolveResult => {
+          if (s === '/') return {load: Promise.resolve({contents: config})}
+          else return {external: Promise.resolve(true)}
+        },
+        true
+      ),
+      entry: {index: true},
+    })
+  }
+  src.unshift({path: '/config.js', content: config, entry: {index: true}})
 
   // entry first, rest unchanged
   src.sort((a, b) => +!!b.entry - +!!a.entry)
@@ -161,6 +192,14 @@ export const loadFromGithub = async ({
 }
 
 export const loadTreeFromGithub = async (tree: string, extension?: string) => {
+  if (api.remote?.tree) {
+    let t = `tree=${encodeURIComponent(tree)}`
+    let e = `extension=${encodeURIComponent(extension)}`
+    let res = await fetch(`${api.remote.tree}?${t}&${e}`)
+    let data: SrcFile[] = await res.json()
+    if (res.status !== 200) throw new Error(data as any)
+    return data.map((f) => new SrcFile(f))
+  }
   let [repo, path, tagName] = parseURL(tree)
   let tag = await getTag({repo, name: tagName})
 
@@ -182,12 +221,7 @@ export const loadTreeFromGithub = async (tree: string, extension?: string) => {
     .map((path) => {
       return new SrcFile({
         path,
-        content: async () => {
-          let url = `https://raw.githubusercontent.com/${repo}/${tag.name}/${path}`
-          let res = await fetch(url)
-          let content = await res.text()
-          return res.status === 200 && content
-        },
+        url: `https://raw.githubusercontent.com/${repo}/${tag.name}${path}`,
       })
     })
 }

@@ -45,10 +45,14 @@ export class CollectionEditor {
   extensions: Extension[] = [basicSetup]
   registry: LanguageRegistry
   editorView: EditorView
-  constructor(registry: LanguageRegistry) {
+  constructor(
+    registry: LanguageRegistry,
+    commit?: (file: SrcFile, updated: string) => void
+  ) {
     this.registry = registry
     this.inflight = createInflightManager()
     this.loading = this.inflight.inflights
+    if (commit) this._commit = commit
   }
   mount(parent: HTMLElement) {
     this.editorView = new EditorView({
@@ -107,10 +111,13 @@ export class CollectionEditor {
       }
     )
   }
+  _commit = (file: SrcFile, updated: string) => {
+    file.content = updated
+  }
   commit() {
     if (this.file) {
       let content = this.editorView.state.doc.sliceString(0)
-      this.file.content = content
+      this._commit(this.file, content)
     }
     this.trigger('commit')
   }
@@ -136,6 +143,11 @@ export class CollectionEditor {
 
 export class LanguageEditor extends CollectionEditor {
   language: Language
+  constructor(registry: LanguageRegistry) {
+    super(registry, (file, content) => {
+      this.language?.change?.(file.path, content)
+    })
+  }
   async openLanguage(language: string) {
     this.commit()
     this.inflight.add(
@@ -177,7 +189,7 @@ export class LanguageEditor extends CollectionEditor {
 
 export class SampleEditor extends CollectionEditor {
   language: Language
-  async openSample(sample: SrcFile[], language: string) {
+  async openSample(language: string) {
     this.commit()
     let name = `${language}.${Math.random().toString(36).slice(2, 10)}`
     this.inflight.add(
@@ -187,7 +199,7 @@ export class SampleEditor extends CollectionEditor {
       async (l) => {
         this.language = l
         let support = async () => l.support
-        await this.openCollection({name, src: sample}, support, true)
+        await this.openCollection({name, src: l.sample}, support, true)
       },
       async () => this.trigger('open-sample')
     )

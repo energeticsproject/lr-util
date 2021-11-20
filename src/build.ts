@@ -1,17 +1,26 @@
-import {
-  Plugin,
-  OnLoadResult,
-  initialize,
-  build as esBuild,
-} from 'esbuild-wasm/esm/browser.js'
+import type * as es from 'esbuild-wasm'
+
+export interface EsbuildExport {
+  initialize: (options: es.InitializeOptions) => Promise<void>
+  build: (options: es.BuildOptions) => Promise<es.BuildResult>
+}
+
+let esbuildLoader: () => Promise<EsbuildExport> = async () => null
+export const setEsbuildLoader = (loader: () => Promise<EsbuildExport>) => {
+  esbuildLoader = () => {
+    let p = loader()
+    esbuildLoader = () => p
+    return p
+  }
+}
 
 export type ResolveResult =
-  | {load: Promise<OnLoadResult>}
+  | {load: Promise<es.OnLoadResult>}
   | {external: Promise<any>}
 
 const makeResolverPlugin = (
   resolve: (path: string) => ResolveResult,
-  loads: {[x: string]: Promise<OnLoadResult>},
+  loads: {[x: string]: Promise<es.OnLoadResult>},
   externals: {[x: string]: Promise<any>}
 ) => {
   const resolvePath = (base: string, path: string): string => {
@@ -27,7 +36,7 @@ const makeResolverPlugin = (
     return p
   }
 
-  const plugin: Plugin = {
+  const plugin: es.Plugin = {
     name: 'ResolverPlugin',
     setup(build) {
       build.onResolve({filter: /./}, (args) => {
@@ -55,21 +64,20 @@ const makeResolverPlugin = (
 let esbuildInitialiser = null
 export const build = async (
   entry: string,
-  resolve: (path: string) => ResolveResult
+  resolve: (path: string) => ResolveResult,
+  skipExec = false
 ): Promise<any> => {
-  if (!esbuildInitialiser) {
-    const wasmURL = 'https://unpkg.com/esbuild-wasm@0.13.14/esbuild.wasm'
-    esbuildInitialiser = initialize({wasmURL})
-  }
+  let {build: esbuild} = await esbuildLoader()
   await esbuildInitialiser
-  let loads: {[key: string]: Promise<OnLoadResult>} = {}
+  let loads: {[key: string]: Promise<es.OnLoadResult>} = {}
   let externals: {[key: string]: Promise<any>} = {}
-  let build = await esBuild({
+  let build = await esbuild({
     bundle: true,
     format: 'iife',
-    globalName: '__exports',
+    globalName: 'exports',
     entryPoints: [entry],
     plugins: [makeResolverPlugin(resolve, loads, externals)],
+    write: false,
   })
 
   let keys = Object.keys(externals)
@@ -77,9 +85,10 @@ export const build = async (
   let map = {}
   for (let i in keys) map[keys[i]] = vals[i]
 
-  let out = new Function(
-    'require',
-    build.outputFiles[0].text + '\nreturn __exports\n'
-  )((path: string) => map[path])
+  let src = build.outputFiles[0].text
+  if (skipExec) return src
+
+  src += '\nreturn exports;\n'
+  let out = new Function('require', src)((path: string) => map[path])
   return out
 }

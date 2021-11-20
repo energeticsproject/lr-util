@@ -29,7 +29,7 @@ export class LanguageRegistry {
   modules: {
     [module: string]: {
       languageOption: LanguageOption
-      inflight?: Promise<{src: SrcFile[]; prebuilt?: SrcFile[]}>
+      inflight?: Promise<[{src: SrcFile[]; prebuilt?: SrcFile[]}, SrcFile[]]>
       language: Language
     }
   } = {}
@@ -67,12 +67,15 @@ export class LanguageRegistry {
     if (!includeModules && module !== r.languageOption.module.index) return null
 
     if (!r.language) {
-      r.inflight = r.inflight ?? r.languageOption.files()
-      let {src, prebuilt} = await r.inflight
+      r.inflight =
+        r.inflight ??
+        Promise.all([r.languageOption.files(), r.languageOption.sample()])
+      let [{src, prebuilt}, sample] = await r.inflight
       delete r.inflight
       r.language = new Language({
         src,
         prebuilt,
+        sample,
         registry: this,
         option: r.languageOption,
       })

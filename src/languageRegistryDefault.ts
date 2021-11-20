@@ -372,6 +372,9 @@ const extensions: FileExtension[] = [
     extension: ['js'],
     index: async (r) => {
       let l = await r.get('javascript')
+      if (l.errors.parser || l.errors.support || l.errors.index) {
+        throw new Error(l.errors.parser ?? l.errors.support ?? l.errors.index)
+      }
       return {
         parser: (l.parser as LRParser).configure({dialect: ''}),
         support: l.module.support.javascriptLanguage,
@@ -382,6 +385,9 @@ const extensions: FileExtension[] = [
     extension: ['ts'],
     index: async (r) => {
       let l = await r.get('javascript')
+      if (l.errors.parser || l.errors.support || l.errors.index) {
+        throw new Error(l.errors.parser ?? l.errors.support ?? l.errors.index)
+      }
       return {
         parser: (l.parser as LRParser).configure({dialect: 'ts'}),
         support: l.module.support.typescriptLanguage,
@@ -392,6 +398,9 @@ const extensions: FileExtension[] = [
     extension: ['json'],
     index: async (r) => {
       let l = await r.get('json')
+      if (l.errors.parser || l.errors.support || l.errors.index) {
+        throw new Error(l.errors.parser ?? l.errors.support ?? l.errors.index)
+      }
       return {
         parser: (l.parser as LRParser).configure({}),
         support: l.support,
@@ -402,6 +411,9 @@ const extensions: FileExtension[] = [
     extension: ['grammar'],
     index: async (r) => {
       let l = await r.get('lezer')
+      if (l.errors.parser || l.errors.support || l.errors.index) {
+        throw new Error(l.errors.parser ?? l.errors.support ?? l.errors.index)
+      }
       return {
         parser: (l.parser as LRParser).configure({}),
         support: l.support,

@@ -1,18 +1,24 @@
-import {build} from './build'
-import {buildParserFileAsync} from './buildParserFileAsync'
+import {setEsbuildLoader, build} from './build'
+import {
+  setBuildParserFileAsyncWorkerLoader,
+  buildParserFileAsync,
+} from './buildParserFileAsync'
 import {SrcFile, Language} from './Language'
 import {LanguageEditor, SampleEditor, CollectionEditor} from './LanguageEditor'
 import {LanguageRegistry} from './LanguageRegistry'
 import {languageRegistryDefault} from './languageRegistryDefault'
 import {
   setGithubAuth,
+  setGithubRemote,
   loadFromGithub,
   loadTreeFromGithub,
 } from './loadFromGithub'
 import {print, parse, printOnly} from './print'
 
 export {
+  setEsbuildLoader,
   build,
+  setBuildParserFileAsyncWorkerLoader,
   buildParserFileAsync,
   SrcFile,
   Language,
@@ -22,6 +28,7 @@ export {
   LanguageRegistry,
   languageRegistryDefault,
   setGithubAuth,
+  setGithubRemote,
   loadFromGithub,
   loadTreeFromGithub,
   print,
@@ -30,7 +37,9 @@ export {
 }
 
 export default {
+  setEsbuildLoader,
   build,
+  setBuildParserFileAsyncWorkerLoader,
   buildParserFileAsync,
   SrcFile,
   Language,
@@ -40,6 +49,7 @@ export default {
   LanguageRegistry,
   languageRegistryDefault,
   setGithubAuth,
+  setGithubRemote,
   loadFromGithub,
   loadTreeFromGithub,
   print,

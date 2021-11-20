@@ -1,11 +1,13 @@
-// @ts-ignore
-import workerSrc from './buildParserFileAsyncWorker'
-
 let workerBlob: Blob, worker: Worker
 
-if (typeof window !== 'undefined') {
-  workerBlob = new Blob([workerSrc], {type: 'application/javascript'})
-  worker = new Worker(URL.createObjectURL(workerBlob))
+let workerLoader = async () => {
+  throw new Error('No BuildParserFileAsyncWorkerLoader configured')
+  return ''
+}
+export const setBuildParserFileAsyncWorkerLoader = (
+  loader: () => Promise<string>
+) => {
+  workerLoader = loader
 }
 
 const cache: {[key: string]: Promise<{parser: string; terms: string}>} = {}
@@ -17,10 +19,17 @@ export const buildParserFileAsync = (grammar: string) => {
   let p = new Promise<{parser: string; terms: string}>(
     async (resolve, reject) => {
       if (typeof window !== 'undefined') {
+        if (!worker) {
+          // @ts-ignore
+          let workerSrc: string = await workerLoader()
+          workerBlob = new Blob([workerSrc], {type: 'application/javascript'})
+          worker = new Worker(URL.createObjectURL(workerBlob))
+        }
         worker.postMessage(grammar)
         worker.onmessage = (e: {data: string}) => {
-          let {parser, terms, error} = JSON.parse(e.data)
+          let {parser, terms, warnings, error} = JSON.parse(e.data)
           if (error) return reject(error)
+          if (warnings.length) reject(warnings.join(', '))
           resolve({parser, terms})
         }
       } else {
