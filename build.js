@@ -39,17 +39,19 @@ const build = async () => {
     },
   }
 
+  let shared = {
+    entryPoints: ['src/index.ts'],
+    bundle: true,
+    sourcemap: true,
+    target: ['esnext'],
+    plugins: [workerPlugin],
+  }
   await esbuild
-    .build({
-      entryPoints: ['src/index.ts'],
-      outdir: 'build-temp',
-      bundle: true,
-      sourcemap: true,
-      // minify: true,
-      format: 'esm',
-      target: ['esnext'],
-      plugins: [workerPlugin],
-    })
+    .build({...shared, outfile: 'build-temp/index.esm.js', format: 'esm'})
+    .catch(() => process.exit(1))
+
+  await esbuild
+    .build({...shared, outfile: 'build-temp/index.js', format: 'cjs'})
     .catch(() => process.exit(1))
 
   typescript
