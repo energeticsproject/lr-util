@@ -1,6 +1,6 @@
 import {Parser} from '@lezer/common'
 import {LanguageSupport} from '@codemirror/language'
-import {build, ResolveResult} from './build'
+import {build, resolvePath, ResolveResult} from './build'
 import {LanguageOption, LanguageRegistry} from './LanguageRegistry'
 import {buildParserFileAsync} from './buildParserFileAsync'
 
@@ -209,13 +209,13 @@ export const buildLanguage = async (
     }
   }
 
-  const exec = async (path: string) => {
-    if (!prebuilt) return build(path, resolve)
+  const exec = async (entry: string) => {
+    if (!prebuilt) return build(entry, resolve)
 
     // the first time build() is called it initialises esbuild-wasm, which
     // can take a few seconds - an unnecessary step for prebuilt files -
     // these 15-ish lines of JavaScript suffice
-    let r = resolve(path)
+    let r = resolve(resolvePath('/', entry))
     if ('external' in r) return null
     let src = (await r.load).contents.toString()
     if (!/exports\s*=/.test(src)) src = 'var exports = {};\n\n' + src
@@ -224,11 +224,14 @@ export const buildLanguage = async (
     await Promise.all(
       src.match(/require\(['"][^'"]+['"]\)/g).map(async (r) => {
         let path = r.match(/require\(['"]([^'"]+)['"]\)/)?.[1]
+        path = resolvePath(entry, path)
         let ex = resolve(path)
         if ('external' in ex) externals[path] = await ex.external
       })
     )
-    return new Function('require', src)((path: string) => externals[path])
+    return new Function('require', src)(
+      (path: string) => externals[resolvePath(entry, path)]
+    )
   }
 
   let parserEntry = src.find((f) => f?.entry?.parser).path
@@ -236,6 +239,7 @@ export const buildLanguage = async (
     parserExports = await exec(parserEntry)
     emit.parser(parserExports, null)
   } catch (error) {
+    console.error(error)
     emit.parser(null, error)
   }
 
@@ -244,6 +248,7 @@ export const buildLanguage = async (
     supportExports = await exec(supportEntry)
     emit.support(supportExports, null)
   } catch (error) {
+    console.error(error)
     emit.support(null, error)
   }
 
@@ -252,6 +257,7 @@ export const buildLanguage = async (
     indexExports = await exec(indexEntry)
     emit.index(indexExports, null)
   } catch (error) {
+    console.error(error)
     emit.index(null, error)
   }
 

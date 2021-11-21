@@ -20,7 +20,11 @@ const api = {
   },
 }
 
-export const setGithubRemote = (remote: {language: string; tree: string}) => {
+export const setGithubRemote = (remote: {
+  language: string
+  tree: string
+  esbuild?: string
+}) => {
   api.remote = remote
 }
 
@@ -114,21 +118,55 @@ const markEntry = (files: SrcFile[], isParser: boolean, fallback: string) => {
 export type LoadFromGithubParams = {
   parser: string
   support: string
-  config: string
+  config?: string
 }
+
+export const loadFromGithubRemote = async ({
+  parser,
+  support,
+  config,
+}: LoadFromGithubParams) => {
+  let p = `?parser=${encodeURIComponent(parser)}`
+  let s = `&support=${encodeURIComponent(support)}`
+  let c = encodeURIComponent(config)
+  if (!api.remote.esbuild) {
+    let res = await fetch(`${api.remote.language}${p}${s}&config=${c}`)
+    let data = await res.json()
+    if (res.status !== 200) throw new Error(data)
+    return data
+  }
+  let [{src, prebuilt}, prebuiltConfig] = await Promise.all([
+    (async () => {
+      let res = await fetch(`${api.remote.language}${p}${s}`)
+      let data = await res.json()
+      if (res.status !== 200) throw new Error(data)
+      return data
+    })(),
+    (async () => {
+      let res = await fetch(`${api.remote.esbuild}?src=${c}`)
+      let data = await res.text()
+      if (res.status !== 200) throw new Error(data)
+      return data
+    })(),
+  ])
+  src.unshift({path: '/config.js', content: config, entry: {index: true}})
+  if (prebuilt && prebuiltConfig) {
+    prebuilt.unshift({
+      path: '/config.js',
+      content: prebuiltConfig,
+      entry: {index: true},
+    })
+  }
+  return {src, prebuilt}
+}
+
 export const loadFromGithub = async ({
   parser,
   support,
   config,
 }: LoadFromGithubParams): Promise<{src: SrcFile[]; prebuilt?: SrcFile[]}> => {
   if (api.remote?.language) {
-    let p = `parser=${encodeURIComponent(parser)}`
-    let s = `support=${encodeURIComponent(support)}`
-    let c = `config=${encodeURIComponent(config)}`
-    let res = await fetch(`${api.remote.language}?${p}&${s}&${c}`)
-    let data = await res.json()
-    if (res.status !== 200) throw new Error(data)
-    return data
+    return loadFromGithubRemote({parser, support, config})
   }
   let [parserRepo, , parserTagName] = parseURL(parser)
   let [supportRepo, , supportTagName] = parseURL(support)
@@ -169,7 +207,7 @@ export const loadFromGithub = async ({
     }
   }
 
-  if (prebuilt) {
+  if (config && prebuilt) {
     prebuilt.unshift({
       path: '/config.js',
       content: await build(
@@ -183,7 +221,9 @@ export const loadFromGithub = async ({
       entry: {index: true},
     })
   }
-  src.unshift({path: '/config.js', content: config, entry: {index: true}})
+  if (config) {
+    src.unshift({path: '/config.js', content: config, entry: {index: true}})
+  }
 
   // entry first, rest unchanged
   src.sort((a, b) => +!!b.entry - +!!a.entry)
