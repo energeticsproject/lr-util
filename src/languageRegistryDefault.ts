@@ -10,19 +10,6 @@ import {loadFromGithub, loadTreeFromGithub} from './loadFromGithub'
 let gh = 'https://raw.githubusercontent.com/'
 let sp = 'TheRenegadeCoder/sample-programs/archive/'
 
-let fa = async (a: string[]) => {
-  let f: SrcFile[] = await Promise.all(
-    a.map(async (path) => {
-      if (!path) return null
-      let res = await fetch(path)
-      let content = await res.text()
-      return res.status === 200 && {path, content}
-    })
-  )
-  f = f.filter((v) => v)
-  return f
-}
-
 const languageOptions: LanguageOption[] = [
   {
     label: 'Basic Example',
@@ -39,9 +26,11 @@ const languageOptions: LanguageOption[] = [
       })
     },
     sample: async () => {
-      let [txt] = await fa([gh + 'codemirror/lang-example/main/test/cases.txt'])
+      let res = await fetch(gh + 'codemirror/lang-example/main/test/cases.txt')
+      if (res.status !== 200) return []
+      let txt = await res.text()
       let src: SrcFile[] = []
-      for (let c of txt.content.split(/(^|\n)#\s+/)) {
+      for (let c of txt.split(/(^|\n)#\s+/)) {
         if (!c.trim()) continue
         c = c.split('==>')[0]
         let [head, ...tail] = c.split('\n')
@@ -198,23 +187,23 @@ const languageOptions: LanguageOption[] = [
       })
     },
     sample: async () => {
-      let src = await fa(
-        languageOptions.map((lo) => {
-          if (lo.module.index === 'basic-example') {
-            return `${gh}codemirror/lang-example/main/src/syntax.grammar`
-          } else if (lo.module.index === 'lezer') {
-            return `${gh}lezer-parser/lezer-grammar/main/src/lezer.grammar`
-          }
+      let src = []
+      for (let lo of languageOptions) {
+        if (lo.module.index === 'markdown') continue
+        if (lo.module.index === 'basic-example') {
+          let url = `${gh}codemirror/lang-example/main/src/syntax.grammar`
+          src.push(new SrcFile({path: '/src/basic-example.grammar', url}))
+        } else if (lo.module.index === 'lezer') {
+          let url = `${gh}lezer-parser/lezer-grammar/main/src/lezer.grammar`
+          src.push(new SrcFile({path: url, url}))
+        } else {
           let repo = lo.module.parser ?? lo.module.support
           repo = repo.replace('@lezer', 'lezer-parser').replace('@', '')
-          return `${gh}${repo}/main/src/${lo.module.index}.grammar`
-        })
-      )
-      for (let f of src) {
-        if (f.path.includes('lang-example')) {
-          f.path = '/src/basic-example.grammar'
+          let url = `${gh}${repo}/main/src/${lo.module.index}.grammar`
+          src.push(new SrcFile({path: url, url}))
         }
       }
+
       return src
     },
   },
@@ -313,7 +302,8 @@ const languageOptions: LanguageOption[] = [
           `export {parser} from './parser'\n` +
           `export {PostgreSQL as support} from './support'\n`,
       })
-      prebuilt[0].content += `\nexport {parser}\n`
+      let p = prebuilt.find((f) => f.entry.parser)
+      p.content += `\nexports.parser = parser\n`
       return {src, prebuilt}
     },
     sample: async () => {
@@ -341,7 +331,8 @@ const languageOptions: LanguageOption[] = [
           `export {parser} from './parser'\n` +
           `export {wastLanguage as support} from './support'\n`,
       })
-      prebuilt[0].content += `\nexport {parser}\n`
+      let p = prebuilt.find((f) => f.entry.parser)
+      p.content += `\nexports.parser = parser\n`
       return {src, prebuilt}
     },
     sample: () => loadTreeFromGithub('WAVM/WAVM/Examples', '.wast'),

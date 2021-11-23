@@ -58,13 +58,12 @@ export class LanguageRegistry {
     if (parser) this.modules[parser] = value
     if (support) this.modules[support] = value
   }
-  async get(module: string, initialBuild?: boolean): Promise<Language>
-  // prettier-ignore
-  async get(module: string, initialBuild: boolean, includeModules: true): Promise<any>
-  async get(module: string, initialBuild = true, includeModules?: boolean) {
+  async get(module: string): Promise<Language>
+  async get(module: string, internal: true): Promise<any>
+  async get(module: string, internal?: boolean) {
     let r = this.modules[module]
     if (!r) return null
-    if (!includeModules && module !== r.languageOption.module.index) return null
+    if (!internal && module !== r.languageOption.module.index) return null
 
     if (!r.language) {
       r.inflight =
@@ -79,8 +78,9 @@ export class LanguageRegistry {
         registry: this,
         option: r.languageOption,
       })
-      if (initialBuild) await r.language.build()
+      await r.language.build()
     }
+    if (!internal) await r.language.inflight
 
     if (module === r.languageOption.module.index) {
       return r.language

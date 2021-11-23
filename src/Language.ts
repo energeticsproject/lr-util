@@ -194,7 +194,7 @@ export const buildLanguage = async (
       external: new Promise(async (resolve, reject) => {
         try {
           if (registry) {
-            let content = await registry.get(path, true, true)
+            let content = await registry.get(path, true)
             if (content) return resolve(content)
           }
           if (externals[path]) {
